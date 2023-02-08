@@ -17,7 +17,7 @@ import pandas as pd
 ds_train, ds_train_info = tfds.load('wider_face', split='train', shuffle_files=True, with_info=True)
 ds_train = ds_train.filter(lambda x: len(x["faces"]["bbox"]) == 1) 
 ds_test, ds_test_info = tfds.load('wider_face', split='test', shuffle_files=True, with_info=True)
-ds_test = ds_test.filter(lambda x: len(x["faces"]["bbox"]) == 1) 
+ds_test = ds_test.filter(lambda x: len(x["faces"]["bbox"]) == 1)
 
 # %%
 tfds.as_dataframe(ds_train.take(3), ds_train_info)
