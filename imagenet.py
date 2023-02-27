@@ -9,48 +9,19 @@
 # %conda install akida-models
 
 # %%
-import tensorflow_datasets as tfds
 import tensorflow as tf
-import pandas as pd
+import utils
 
 # %%
-ds_train, ds_train_info = tfds.load('wider_face', split='train', shuffle_files=True, with_info=True)
-ds_train = ds_train.filter(lambda x: len(x["faces"]["bbox"]) == 1) 
-ds_test, ds_test_info = tfds.load('wider_face', split='test', shuffle_files=True, with_info=True)
-ds_test = ds_test.filter(lambda x: len(x["faces"]["bbox"]) == 1)
-
-# %%
-tfds.as_dataframe(ds_train.take(3), ds_train_info)
-
-# %%
-from tensorflow.image import resize
-import numpy as np
-
-def normalize_img(image, label):
-  """Normalizes images: `uint8` -> `float32`."""
-
-  return tf.cast(resize(image, [224,224]),tf.float32) / 255., label
-
-# %%
-ds_train = ds_train.map(lambda x : normalize_img(image=x["image"], label=x["faces"]["bbox"]), num_parallel_calls=tf.data.AUTOTUNE)
-ds_train = ds_train.cache()
-ds_train = ds_train.shuffle(ds_train_info.splits['train'].num_examples)
-ds_train = ds_train.batch(128)
-ds_train = ds_train.prefetch(tf.data.AUTOTUNE)
-
-# %%
-ds_test = ds_test.map(lambda x : normalize_img(image=x["image"], label=x["faces"]["bbox"]), num_parallel_calls=tf.data.AUTOTUNE)
-ds_test = ds_test.cache()
-ds_test = ds_test.shuffle(ds_test_info.splits['test'].num_examples)
-ds_test = ds_test.batch(128)
-ds_test = ds_test.prefetch(tf.data.AUTOTUNE)
+ds_train, ds_train_info = utils.getDataset('train')
+ds_test, ds_test_info = utils.getDataset('test')
+ds_eval, ds_eval_info = utils.getDataset('validation')
 
 # %%
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import get_file
 from tensorflow.keras.layers import Dense
 from tensorflow.keras import Sequential
-import tensorflow as tf
 
 # Retrieve the float model with pretrained weights and load it
 model_file = get_file(
@@ -77,6 +48,67 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="./imagenet_models",
 # %%
 model.fit(
     ds_train,
-    epochs=50,
+    epochs=5,
     validation_data=ds_test,
 )
+
+# %%
+
+results = model.evaluate(
+  ds_eval
+)
+
+print("test loss, test acc:", results)
+
+model.save("models/imagenet_model")
+
+# %% 
+import cv2
+import numpy as np
+
+model = tf.keras.models.load_model("models/imagenet_model")
+
+# %%
+bbox = None
+image = None
+
+for ele in ds_eval.take(1):
+  
+  image = np.array(ele[0])
+  bbox = np.array(ele[1])
+  
+  cv2.imshow("bounding_box", image)
+  cv2.waitKey(0)
+  cv2.destroyAllWindows()
+  
+  print(bbox)
+  break
+
+
+
+prediction = model.predict(
+  image
+)
+
+# %%
+
+for box in [bbox, prediction]:
+
+  x = box[0]
+  y = box[1]
+  xx = box[2]
+  yy = box[3]
+
+  print("x ", x, "y ", y, "xx ", xx, "yy", yy)
+
+  cv2.rectangle(image, (x, y), (xx, yy), (0, 0, 255), 2)
+  print("x,y,w,h:",x,y,xx,yy)
+  
+# save resulting image
+cv2.imwrite('example.jpg', image)      
+
+# show thresh and result    
+cv2.imshow("bounding_box", image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+# %%

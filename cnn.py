@@ -12,6 +12,9 @@
 import tensorflow_datasets as tfds
 import tensorflow as tf
 import pandas as pd
+from tensorflow.image import resize
+import numpy as np
+import utils
 
 # %%
 
@@ -24,37 +27,12 @@ input_shapes = [
 (7,7,3),
 (4,)]
 
-# %%
-ds_train, ds_train_info = tfds.load('wider_face', split='train', shuffle_files=True, with_info=True)
-ds_train = ds_train.filter(lambda x: len(x["faces"]["bbox"]) <= 1) 
-ds_test, ds_test_info = tfds.load('wider_face', split='test', shuffle_files=True, with_info=True)
-ds_test = ds_test.filter(lambda x: len(x["faces"]["bbox"]) <= 1)
-
+  
 
 # %%
-from tensorflow.image import resize
-import numpy as np
-
-def normalize_img(image, label):
-  """Normalizes images: `uint8` -> `float32`."""
-
-  print("\n\n\n\n",label,"\n\n",len(label),"\n\n")
-
-  return tf.cast(resize(image, [224,224]),tf.float32) / 255., label
-
-# %%
-ds_train = ds_train.map(lambda x : normalize_img(image=x["image"], label=x["faces"]["bbox"]), num_parallel_calls=tf.data.AUTOTUNE)
-ds_train = ds_train.cache()
-ds_train = ds_train.shuffle(ds_train_info.splits['train'].num_examples)
-ds_train = ds_train.batch(128)
-ds_train = ds_train.prefetch(tf.data.AUTOTUNE)
-
-# %%
-ds_test = ds_test.map(lambda x : normalize_img(image=x["image"], label=x["faces"]["bbox"]), num_parallel_calls=tf.data.AUTOTUNE)
-ds_test = ds_test.cache()
-ds_test = ds_test.shuffle(ds_test_info.splits['test'].num_examples)
-ds_test = ds_test.batch(128)
-ds_test = ds_test.prefetch(tf.data.AUTOTUNE)
+ds_train, ds_train_info = utils.getDataset('train')
+ds_test, ds_test_info = utils.getDataset('test')
+ds_eval, ds_eval_info = utils.getDataset('validation')
 
 # %%
 from tensorflow.keras.models import load_model
@@ -66,8 +44,6 @@ import tensorflow as tf
 model = Sequential()
 
 for input_shape in input_shapes:
-  
-  print(input_shape)
   
   model.add(Conv2D(2,7, input_shape=input_shape)) 
   model.add(BatchNormalization(input_shape=input_shape)) 
@@ -88,8 +64,13 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="./imagenet_models",
                                                  verbose=1)
 
 # %%
-model.fit(
+history = model.fit(
     ds_train,
-    epochs=2,
+    epochs=100,
     validation_data=ds_test,
+)
+
+# %%
+model.evaluate(
+    ds_eval
 )
