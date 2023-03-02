@@ -74,3 +74,21 @@ history = model.fit(
 model.evaluate(
     ds_eval
 )
+
+# %%
+for ele in ds_eval.take(1):
+
+  predictions = tf.convert_to_tensor([np.array([bbox]) for bbox in model.predict(ele[0])])
+
+  display(predictions)
+  #display(ele[1])
+
+  images = tf.image.draw_bounding_boxes(
+    ele[0], ele[1], [(0, 0, 255) for _ in range(len(ele[0]))], name=None
+    )
+  
+  images = tf.image.draw_bounding_boxes(
+    images, predictions, [(0, 255, 0) for _ in range(len(images))], name=None
+    )
+  
+  utils.display_imgs(images)
