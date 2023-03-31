@@ -9,7 +9,6 @@
 # %conda install akida-models
 
 # %%
-import tensorflow_datasets as tfds
 import tensorflow as tf
 import pandas as pd
 from tensorflow.image import resize
@@ -20,11 +19,12 @@ import utils
 
 input_shapes = [
 (224,224,3),
-(112,112,3),
-(56,56,3),
-(28,28,3),
-(14,14,3),
-(7,7,3),
+(224,224,64),
+(112,112,128),
+(56,56,256),
+(28,28,512),
+(14,14,512),
+(7,7,256),
 (4,)]
 
   
@@ -35,8 +35,6 @@ ds_test, ds_test_info = utils.getDataset('test')
 ds_eval, ds_eval_info = utils.getDataset('validation')
 
 # %%
-from tensorflow.keras.models import load_model
-from tensorflow.keras.utils import get_file
 from tensorflow.keras.layers import Dense, Flatten, ReLU, Conv2D, BatchNormalization
 from tensorflow.keras import Sequential
 import tensorflow as tf
@@ -63,6 +61,9 @@ cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="./imagenet_models",
                                                  save_weights_only=True,
                                                  verbose=1)
 
+callback = [tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)]
+
+
 # %%
 history = model.fit(
     ds_train,
@@ -76,19 +77,27 @@ model.evaluate(
 )
 
 # %%
+model.save("models/cnn_model")
+
+
+# %%
+model = tf.keras.models.load_model("models/cnn_model")
+
+# %%
 for ele in ds_eval.take(1):
 
   predictions = tf.convert_to_tensor([np.array([bbox]) for bbox in model.predict(ele[0])])
 
-  display(predictions)
-  #display(ele[1])
+  print(predictions)
+  print(ele[1])
 
   images = tf.image.draw_bounding_boxes(
-    ele[0], ele[1], [(0, 0, 255) for _ in range(len(ele[0]))], name=None
+    ele[0], ele[1], [(0, 0, 1, 1) for _ in range(len(ele[0]))], name=None
     )
   
   images = tf.image.draw_bounding_boxes(
-    images, predictions, [(0, 255, 0) for _ in range(len(images))], name=None
+    images, predictions, [(0, 1, 0, 1) for _ in range(len(images))], name=None
     )
   
   utils.display_imgs(images)
+# %%

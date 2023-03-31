@@ -2,13 +2,12 @@ import tensorflow_datasets as tfds
 import tensorflow as tf
 from tensorflow.image import resize
 import matplotlib.pyplot as plt
+import numpy as np
 
 def normalize_img(image, label):
   """Normalizes images: `uint8` -> `float32`."""
 
-  print("\n\n\n\n",label,"\n\n",len(label),"\n\n")
-
-  return tf.cast(resize(image, [224,224]),tf.float32) / 255., label
+  return tf.cast(resize(image, [224,224]),tf.float32) / 255., label #- [0.5 for _ in range(4)]
 
 def dataFrameMap(x):
   
@@ -16,39 +15,63 @@ def dataFrameMap(x):
   
   return x
 
-def getDataset(name : str) :
+def getDataset(name : str, only_one: bool) -> tf.data.Dataset:
   ds, ds_info = tfds.load('wider_face', split=name, shuffle_files=True, with_info=True)
-  ds = ds.filter(lambda x: len(x["faces"]["bbox"]) == 1) 
+  if only_one:
+    ds = ds.filter(lambda x: len(x["faces"]["bbox"]) == 1) 
   #ds = ds.map(dataFrameMap) 
   
   ds = ds.map(lambda x : normalize_img(image=x["image"], label=x["faces"]["bbox"]), num_parallel_calls=tf.data.AUTOTUNE)
-  ds = ds.cache()
-  ds = ds.shuffle(ds_info.splits[name].num_examples)
-  ds = ds.batch(128)
+  if name == "train":
+    ds = ds.cache()
+    #ds = ds.shuffle(ds_info.splits[name].num_examples)
+    ds = ds.batch(128)
+  else:
+    ds = ds.batch(128)
+    ds = ds.cache()
+        
   ds = ds.prefetch(tf.data.AUTOTUNE)
   
   return ds, ds_info
 
-def display_imgs(images, n=6):
+def display_imgs(images, folder : str, n=5):
 
-    image = None
+  image = None
 
-    fig, axs = plt.subplots(1,n)
+  fig, axs = plt.subplots(1,n)
+  
+  fig.set_size_inches(30,20)
+
+  for i in range(n):
     
-    fig.set_size_inches(30,20)
+    image = images[i]
 
-    for i, image in enumerate(images):
+    image = (np.array(image)*255).astype(np.uint8)
 
-        print(i)
+    from PIL import Image
+    
+    im = Image.fromarray(image)
+    im.save(f"images/{folder}/image_{i}.jpeg")
 
-        image = (np.array(image)*255).astype(np.uint8)
+    axs[i].imshow(image)        
+    axs[i].get_xaxis().set_visible(False)
+    axs[i].get_yaxis().set_visible(False)
+    
+def predict(model, model_name, ds):
+  
+  for ele in ds.take(1):
 
-        from PIL import Image
-        im = Image.fromarray(image)
-        im.save("tensor.jpeg")
+    predictions = tf.convert_to_tensor([np.array([bbox]) for bbox in model.predict(ele[0])])
 
-        #axs[i].imshow(image)        
-        axs[i].get_xaxis().set_visible(False)
-        axs[i].get_yaxis().set_visible(False)
-
-    plt.imshow(image)
+    print(f"\n\nGroundtruth: {ele[1]}\n\n")
+    print(f"\n\nPredicetd: {predictions}\n\n")
+    
+    images = tf.image.draw_bounding_boxes(
+      ele[0], ele[1], [(0, 0, 1, 1) for _ in range(len(ele[0]))], name=None
+      )
+    
+    images = tf.image.draw_bounding_boxes(
+      images, predictions, [(0, 1, 0, 1) for _ in range(len(images))], name=None
+      )
+    
+    display_imgs(images, model_name)  
