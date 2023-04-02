@@ -3,11 +3,13 @@ import tensorflow as tf
 from tensorflow.image import resize
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
+import cv2
 
 def normalize_img(image, label):
   """Normalizes images: `uint8` -> `float32`."""
 
-  return tf.cast(resize(image, [224,224]),tf.float32) / 255., label #- [0.5 for _ in range(4)]
+  return tf.cast(resize(image, [224,224]),tf.float32) / 255., label[0] #- [0.5 for _ in range(4)]
 
 def dataFrameMap(x):
   
@@ -15,13 +17,48 @@ def dataFrameMap(x):
   
   return x
 
+def displayBoundingBox(image, bbox: list, title: str):
+  
+  bbox = np.array(bbox)
+  
+  y = int(bbox[0]*image.shape[0])
+  x = int(bbox[1]*image.shape[1])
+  h = int(bbox[2]*image.shape[0])
+  b = int(bbox[3]*image.shape[1])
+  
+  plt.figure()
+  plt.title(title)
+  plt.xlabel(f"shape: {image.shape}\nbbox: {bbox}")
+  #plt.axis('off')
+  plt.imshow(cv2.rectangle((np.array(image)*255).astype(np.uint8), (x,y), (b,h),(255,0,0), 1))
+    
+
 def getDataset(name : str, only_one: bool) -> tf.data.Dataset:
+  
   ds, ds_info = tfds.load('wider_face', split=name, shuffle_files=True, with_info=True)
+  
+  if(name == "test"):
+    display(tfds.as_dataframe(ds.take(10), ds_info))
+  
   if only_one:
     ds = ds.filter(lambda x: len(x["faces"]["bbox"]) == 1) 
   #ds = ds.map(dataFrameMap) 
   
+  if(name == "test"):
+    display(tfds.as_dataframe(ds.take(10), ds_info))
+
+  for ele in ds.take(1):
+    
+    displayBoundingBox(ele["image"]/255, ele["faces"]["bbox"][0], f"{name} VOR NORMALIZATION")
+     
+    x = normalize_img(image=ele["image"], label=ele["faces"]["bbox"])
+    
+    displayBoundingBox(x[0], x[1], f"{name} NACH NORMALIZATION") 
+     
+    break
+  
   ds = ds.map(lambda x : normalize_img(image=x["image"], label=x["faces"]["bbox"]), num_parallel_calls=tf.data.AUTOTUNE)
+  
   if name == "train":
     ds = ds.cache()
     #ds = ds.shuffle(ds_info.splits[name].num_examples)
@@ -47,8 +84,6 @@ def display_imgs(images, folder : str, n=5):
     image = images[i]
 
     image = (np.array(image)*255).astype(np.uint8)
-
-    from PIL import Image
     
     im = Image.fromarray(image)
     im.save(f"images/{folder}/image_{i}.jpeg")
@@ -74,4 +109,4 @@ def predict(model, model_name, ds):
       images, predictions, [(0, 1, 0, 1) for _ in range(len(images))], name=None
       )
     
-    display_imgs(images, model_name)  
+    display_imgs(images, model_name) 
